@@ -17,6 +17,8 @@ mod service;
 mod utils;
 
 use crate::api::user as user_api;
+use crate::utils::csv_utils::{load_csv, walk_csv};
+
 use axum_casbin_auth::casbin::MgmtApi;
 use std::env;
 
@@ -60,8 +62,30 @@ async fn main() -> Result<()> {
     let share_enforcer = casbin_middleware.get_enforcer();
     let clone_enforcer = share_enforcer.clone();
 
+    let preset_rules = load_csv(walk_csv("."));
+    for mut policy in preset_rules {
+        let ptype = policy.remove(0);
+        if ptype.starts_with('p') {
+            match clone_enforcer.write().await.add_policy(policy).await {
+                Ok(_) => info!("Present policies(p) added successfully"),
+                Err(err) => error!("Present policies(p) add error: {}", err.to_string()),
+            };
+            continue;
+        } else if ptype.starts_with('g') {
+            match clone_enforcer
+                .write()
+                .await
+                .add_named_grouping_policy(&ptype, policy)
+                .await
+            {
+                Ok(_) => info!("Preset policies(g) added successfully"),
+                Err(err) => error!("Preset policies(g) add error: {}", err.to_string()),
+            }
+            continue;
+        } else {
+            unreachable!()
+        }
+    }
+
     Ok(())
 }
-
-// setup database
-// setup model
