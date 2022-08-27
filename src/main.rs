@@ -1,3 +1,17 @@
+// Copyright 2022 The casbin Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #[macro_use]
 extern crate diesel;
 #[macro_use]
@@ -17,6 +31,8 @@ mod service;
 mod utils;
 
 use crate::api::user as user_api;
+use crate::utils::csv_utils::{load_csv, walk_csv};
+
 use axum_casbin_auth::casbin::MgmtApi;
 use std::env;
 
@@ -60,8 +76,30 @@ async fn main() -> Result<()> {
     let share_enforcer = casbin_middleware.get_enforcer();
     let clone_enforcer = share_enforcer.clone();
 
+    let preset_rules = load_csv(walk_csv("."));
+    for mut policy in preset_rules {
+        let ptype = policy.remove(0);
+        if ptype.starts_with('p') {
+            match clone_enforcer.write().await.add_policy(policy).await {
+                Ok(_) => info!("Present policies(p) added successfully"),
+                Err(err) => error!("Present policies(p) add error: {}", err.to_string()),
+            };
+            continue;
+        } else if ptype.starts_with('g') {
+            match clone_enforcer
+                .write()
+                .await
+                .add_named_grouping_policy(&ptype, policy)
+                .await
+            {
+                Ok(_) => info!("Preset policies(g) added successfully"),
+                Err(err) => error!("Preset policies(g) add error: {}", err.to_string()),
+            }
+            continue;
+        } else {
+            unreachable!()
+        }
+    }
+
     Ok(())
 }
-
-// setup database
-// setup model
