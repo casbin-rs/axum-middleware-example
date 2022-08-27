@@ -101,5 +101,22 @@ async fn main() -> Result<()> {
         }
     }
 
+    let app = Router::new()
+        .layer(Extension(pool.clone()))
+        .layer(Extension(clone_enforcer))
+        .route("/api/auth/register", post(user_api::register))
+        .route("/api/auth/signin", post(user_api::signin))
+        .route("/api/users", get(user_api::get_all_user))
+        .route("/api/user/:id", get(user_api::get_user))
+        .route("/api/admin/:id", put(user_api::update_user))
+        .route("/api/admin/:id", delete(user_api::delete_user))
+        .layer(casbin_middleware.clone())
+        .layer(middleware::auth::AuthLayer);
+
+    axum::Server::bind(&app_url.parse().unwrap())
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
+
     Ok(())
 }
